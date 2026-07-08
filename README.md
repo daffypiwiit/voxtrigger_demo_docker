@@ -48,7 +48,6 @@ Ejemplo por stack en `.env`:
 
 ```env
 CARRIER_ROUTES=prefix:123,split:1;prefix:321,split:1
-OPENSIPS_CARRIER_REWRITE_HOST=freeswitch:5080
 ```
 
 Formato: rutas separadas por `;`, campos por `,` (`prefix`, `split`, `host` opcional).

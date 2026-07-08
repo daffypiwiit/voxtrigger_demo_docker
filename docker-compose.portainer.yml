@@ -42,7 +42,6 @@ services:
       OPENSIPS_ALT_SIP_PORT: ${OPENSIPS_ALT_SIP_PORT:-5070}
       OPENSIPS_ADDRESS_IP: ${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}
       CARRIER_ROUTES: ${CARRIER_ROUTES:-prefix:23,split:2}
-      OPENSIPS_CARRIER_REWRITE_HOST: ${OPENSIPS_CARRIER_REWRITE_HOST:-freeswitch:5080}
     ports:
       - "${OPENSIPS_SIP_PORT:-5060}:${OPENSIPS_SIP_PORT:-5060}/udp"
       - "${OPENSIPS_SIP_PORT:-5060}:${OPENSIPS_SIP_PORT:-5060}/tcp"
@@ -72,9 +71,6 @@ services:
       FS_RTP_END_PORT: ${FS_RTP_END_PORT:-32768}
     volumes:
       - cdr_vxt:/opt/cdr/vxt
-    ports:
-      - "5080:5080/udp"
-      - "5080:5080/tcp"
     healthcheck:
       test: [ "CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP" ]
       interval: 10s
@@ -96,7 +92,7 @@ services:
     depends_on:
       - opensips
     ports:
-      - "9434:9434"
+      - "${OPENSIPS_EXPORTER_PORT:-9434}:9434"
     networks:
       - sip_net
 
@@ -106,7 +102,7 @@ services:
       freeswitch:
         condition: service_healthy
     ports:
-      - "9282:9282"
+      - "${FREESWITCH_EXPORTER_PORT:-9282}:9282"
     networks:
       - sip_net
 
