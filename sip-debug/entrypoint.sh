@@ -20,9 +20,39 @@ bridge_iface() {
   echo "br-${id:0:12}"
 }
 
+container_name_for_service() {
+  local proj="${SIP_NETWORK%_sip_net}"
+  local svc="$1"
+  curl -sf --unix-socket /var/run/docker.sock \
+    "http://localhost/containers/json?filters=%7B%22name%22%3A%5B%22${proj}-${svc}%22%5D%7D" 2>/dev/null \
+    | sed -n 's/.*"Names":\["\/\([^"]*\)".*/\1/p' \
+    | head -1
+}
+
+container_env() {
+  local name="$1" key="$2"
+  [ -n "$name" ] || return 0
+  curl -sf --unix-socket /var/run/docker.sock \
+    "http://localhost/containers/${name}/json" 2>/dev/null \
+    | tr ',' '\n' \
+    | sed -n "s/.*\"${key}=\\([^\"]*\\)\".*/\\1/p" \
+    | head -1
+}
+
+stack_sip_ports() {
+  local os_name sip alt
+  os_name=$(container_name_for_service opensips || true)
+  sip=$(container_env "$os_name" OPENSIPS_SIP_PORT)
+  alt=$(container_env "$os_name" OPENSIPS_ALT_SIP_PORT)
+  SIP_PORT="${sip:-5060}"
+  ALT_SIP_PORT="${alt:-5070}"
+}
+
 container_ip() {
   local proj="${SIP_NETWORK%_sip_net}"
-  local name="${proj}-${1}-1"
+  local name
+  name=$(container_name_for_service "$1")
+  [ -n "$name" ] || name="${proj}-${1}-1"
   curl -sf --unix-socket /var/run/docker.sock \
     "http://localhost/containers/${name}/json" 2>/dev/null \
     | sed -n 's/.*"IPAddress":"\([0-9.]*\)".*/\1/p' \
@@ -30,21 +60,22 @@ container_ip() {
 }
 
 resolve_capture() {
+  stack_sip_ports
   case "$SIP_CAPTURE" in
     clean|bridge)
       IFACE="${SIP_IFACE:-$(bridge_iface)}"
-      FILTER='(udp or tcp) and (port 5060 or port 5080)'
+      FILTER="(udp or tcp) and (port ${SIP_PORT} or port 5080)"
       local os_ip fs_ip
       os_ip=$(container_ip opensips || true)
       fs_ip=$(container_ip freeswitch || true)
-      echo "=== SIP limpio en ${IFACE} ===" >&2
-      echo "  cliente → OpenSIPS${os_ip:+ ($os_ip)} :5060" >&2
+      echo "=== SIP limpio en ${IFACE} (${SIP_NETWORK}) ===" >&2
+      echo "  cliente → OpenSIPS${os_ip:+ ($os_ip)} :${SIP_PORT}" >&2
       echo "  OpenSIPS → FreeSWITCH${fs_ip:+ ($fs_ip)} :5080" >&2
-      echo "  Prueba: sipsak -f sip-debug/invite-external.sip ... -r 5060" >&2
+      echo "  Prueba: sipsak ... -r ${SIP_PORT}" >&2
       ;;
     all)
       IFACE=any
-      FILTER='(udp or tcp) and (port 5060 or port 5070 or port 5080)'
+      FILTER="(udp or tcp) and (port ${SIP_PORT} or port ${ALT_SIP_PORT} or port 5080)"
       echo "all interfaces — duplicados posibles (lo + bridge + veth)" >&2
       ;;
     *)
