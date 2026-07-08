@@ -27,8 +27,6 @@ services:
       OPENSIPS_ADDRESS_IP: ${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}
       CARRIER_ROUTES: ${CARRIER_ROUTES:-prefix:23,split:2}
       OPENSIPS_CARRIER_REWRITE_HOST: ${OPENSIPS_CARRIER_REWRITE_HOST:-freeswitch:5080}
-    volumes:
-      - ./opensips/postgres-seed:/opt/opensips-seed:ro
     ports:
       - "${OPENSIPS_SIP_PORT:-5060}:${OPENSIPS_SIP_PORT:-5060}/udp"
       - "${OPENSIPS_SIP_PORT:-5060}:${OPENSIPS_SIP_PORT:-5060}/tcp"
@@ -79,11 +77,7 @@ services:
       - sip_net
 
   haproxy:
-    image: haproxy:3.0
-    volumes:
-      - ./haproxy/haproxy.cfg.template:/usr/local/etc/haproxy/haproxy.cfg.template:ro
-      - ./haproxy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
-    entrypoint: ["/docker-entrypoint.sh"]
+    build: ./haproxy
     environment:
       HAPROXY_BACKEND_SERVERS: ${HAPROXY_BACKEND_SERVERS:-127.0.0.1:8080}
     ports:
