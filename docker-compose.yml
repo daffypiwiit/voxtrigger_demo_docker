@@ -1,0 +1,148 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - sip_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  opensips:
+    build: ./opensips
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      OPENSIPS_DB_HOST: postgres
+      OPENSIPS_SIP_PORT: ${OPENSIPS_SIP_PORT:-5060}
+      OPENSIPS_ALT_SIP_PORT: ${OPENSIPS_ALT_SIP_PORT:-5070}
+      OPENSIPS_ADDRESS_IP: ${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}
+      CARRIER_ROUTES: ${CARRIER_ROUTES:-prefix:23,split:2}
+      OPENSIPS_CARRIER_REWRITE_HOST: ${OPENSIPS_CARRIER_REWRITE_HOST:-freeswitch:5080}
+    volumes:
+      - ./opensips/postgres-seed:/opt/opensips-seed:ro
+    ports:
+      - "${OPENSIPS_SIP_PORT:-5060}:${OPENSIPS_SIP_PORT:-5060}/udp"
+      - "${OPENSIPS_SIP_PORT:-5060}:${OPENSIPS_SIP_PORT:-5060}/tcp"
+      - "${OPENSIPS_ALT_SIP_PORT:-5070}:${OPENSIPS_ALT_SIP_PORT:-5070}/udp"
+    networks:
+      - sip_net
+
+  freeswitch:
+    build:
+      context: ./freeswitch
+      args:
+        FREESWITCH_GIT_URL: ${FREESWITCH_GIT_URL:-https://bitbucket.org/piwiit/pwt.freeswitch_vxt.git}
+        FREESWITCH_GIT_BRANCH: ${FREESWITCH_GIT_BRANCH:-development}
+        FREESWITCH_GIT_USER: ${FREESWITCH_GIT_USER:-}
+      secrets:
+        - signalwire_token
+        - freeswitch_git_token
+    depends_on:
+      - opensips
+      - haproxy
+    environment:
+      FS_EXTERNAL_RTP_IP: ${FS_EXTERNAL_RTP_IP:-auto}
+      FS_EXTERNAL_SIP_IP: ${FS_EXTERNAL_SIP_IP:-auto}
+      PWT_SBC_IP: ${PWT_SBC_IP:-opensips}
+      PWT_SBC_PORT: ${OPENSIPS_SIP_PORT:-5060}
+      SOFIA_PROFILE_NAME: ${SOFIA_PROFILE_NAME:-external_0}
+      PWT_VOXTRIGGER_IP: ${PWT_VOXTRIGGER_IP:-haproxy}
+      PWT_VOXTRIGGER_PORT: ${PWT_VOXTRIGGER_PORT:-8080}
+      MEDIA_OUT: ${MEDIA_OUT:-false}
+      VXT_ANSWER_DETECT: ${VXT_ANSWER_DETECT:-false}
+      TIMEOUTMS_ANSWER_VXT: ${TIMEOUTMS_ANSWER_VXT:-2300}
+      VXT_WS_EXCLUDE_PREANSWER: ${VXT_WS_EXCLUDE_PREANSWER:-}
+      VXT_WS_EXCLUDE_ANSWER: ${VXT_WS_EXCLUDE_ANSWER:-}
+      FS_RTP_START_PORT: ${FS_RTP_START_PORT:-16384}
+      FS_RTP_END_PORT: ${FS_RTP_END_PORT:-32768}
+    volumes:
+      - cdr_vxt:/opt/cdr/vxt
+    ports:
+      - "5080:5080/udp"
+      - "5080:5080/tcp"
+    healthcheck:
+      test: ["CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - sip_net
+
+  haproxy:
+    image: haproxy:3.0
+    volumes:
+      - ./haproxy/haproxy.cfg.template:/usr/local/etc/haproxy/haproxy.cfg.template:ro
+      - ./haproxy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+    entrypoint: ["/docker-entrypoint.sh"]
+    environment:
+      HAPROXY_BACKEND_SERVERS: ${HAPROXY_BACKEND_SERVERS:-127.0.0.1:8080}
+    ports:
+      - "8080:8080"
+      - "8405:8405"
+    networks:
+      - sip_net
+
+  opensips_exporter:
+    build:
+      context: ./exporters
+      dockerfile: Dockerfile.opensips
+    depends_on:
+      - opensips
+    ports:
+      - "9434:9434"
+    networks:
+      - sip_net
+
+  freeswitch_exporter:
+    build:
+      context: ./exporters
+      dockerfile: Dockerfile.freeswitch
+    depends_on:
+      freeswitch:
+        condition: service_healthy
+    ports:
+      - "9282:9282"
+    networks:
+      - sip_net
+
+  # Debug SIP: docker compose --profile debug run --rm -it sip-debug
+  sip-debug:
+    build: ./sip-debug
+    image: docker_demo_pwt/sip-debug:latest
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      SIP_NETWORK: ${COMPOSE_PROJECT_NAME:-docker_demo_pwt}_sip_net
+      SIP_CAPTURE: ${SIP_CAPTURE:-clean}
+    stdin_open: true
+    tty: true
+    profiles:
+      - debug
+
+networks:
+  sip_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  cdr_vxt:
+
+secrets:
+  signalwire_token:
+    environment: SIGNALWIRE_TOKEN
+  freeswitch_git_token:
+    environment: FREESWITCH_GIT_TOKEN

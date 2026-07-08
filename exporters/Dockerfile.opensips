@@ -1,0 +1,4 @@
+FROM debian:bookworm-slim
+COPY bin/opensips_exporter /usr/local/bin/opensips_exporter
+EXPOSE 9434
+ENTRYPOINT ["/usr/local/bin/opensips_exporter", "-protocol", "mi_http", "-http_address", "http://opensips:8888/mi/"]

@@ -1,0 +1,31 @@
+global
+    log stdout format raw local0
+    maxconn 100000
+
+defaults
+    log     global
+    option  httplog
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+    timeout tunnel 20s
+
+frontend prometheus
+    bind :8405
+    mode http
+    http-request use-service prometheus-exporter
+    no log
+
+frontend ws_frontend
+    bind *:8080
+    mode http
+    option httplog
+    timeout client 50000ms
+    acl is_websocket hdr(Upgrade) -i WebSocket
+    use_backend websocket_backend if is_websocket
+    default_backend websocket_backend
+
+backend websocket_backend
+    mode http
+    balance roundrobin
+    __BACKEND_SERVERS__

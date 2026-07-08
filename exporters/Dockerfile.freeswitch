@@ -1,0 +1,4 @@
+FROM debian:bookworm-slim
+COPY bin/freeswitch_exporter /usr/local/bin/freeswitch_exporter
+EXPOSE 9282
+ENTRYPOINT ["/usr/local/bin/freeswitch_exporter", "-u", "tcp://freeswitch:8021"]

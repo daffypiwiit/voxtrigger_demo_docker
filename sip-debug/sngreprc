@@ -1,0 +1,2 @@
+# Show OPTIONS and other non-INVITE dialogs
+set sip.noincomplete off
