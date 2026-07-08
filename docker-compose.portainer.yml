@@ -1,3 +1,19 @@
+# Portainer: deploy pre-built images only (no build step).
+#
+# Build on the Docker host first:
+#   DOCKER_BUILDKIT=1 docker compose build
+#
+# Images expected (default project name = directory name):
+#   voxtrigger_demo_docker-opensips:latest
+#   voxtrigger_demo_docker-freeswitch:latest
+#   voxtrigger_demo_docker-haproxy:latest
+#   voxtrigger_demo_docker-opensips_exporter:latest
+#   voxtrigger_demo_docker-freeswitch_exporter:latest
+#
+# Portainer stack settings:
+#   Compose path: docker-compose.portainer.yml
+#   Environment variables: same as .env (runtime only, no build tokens required)
+
 services:
   postgres:
     image: postgres:17
@@ -9,13 +25,13 @@ services:
     networks:
       - sip_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 12
 
   opensips:
-    build: ./opensips
+    image: voxtrigger_demo_docker-opensips:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,15 +51,7 @@ services:
       - sip_net
 
   freeswitch:
-    build:
-      context: ./freeswitch
-      args:
-        FREESWITCH_GIT_URL: ${FREESWITCH_GIT_URL:-https://bitbucket.org/piwiit/pwt.freeswitch_vxt.git}
-        FREESWITCH_GIT_BRANCH: ${FREESWITCH_GIT_BRANCH:-development}
-        FREESWITCH_GIT_USER: ${FREESWITCH_GIT_USER:-}
-      secrets:
-        - signalwire_token
-        - freeswitch_git_token
+    image: voxtrigger_demo_docker-freeswitch:latest
     depends_on:
       - opensips
       - haproxy
@@ -68,7 +76,7 @@ services:
       - "5080:5080/udp"
       - "5080:5080/tcp"
     healthcheck:
-      test: ["CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP"]
+      test: [ "CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP" ]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -77,16 +85,14 @@ services:
       - sip_net
 
   haproxy:
-    build: ./haproxy
+    image: voxtrigger_demo_docker-haproxy:latest
     environment:
       HAPROXY_BACKEND_SERVERS: ${HAPROXY_BACKEND_SERVERS:-127.0.0.1:8080}
     networks:
       - sip_net
 
   opensips_exporter:
-    build:
-      context: ./exporters
-      dockerfile: Dockerfile.opensips
+    image: voxtrigger_demo_docker-opensips_exporter:latest
     depends_on:
       - opensips
     ports:
@@ -95,9 +101,7 @@ services:
       - sip_net
 
   freeswitch_exporter:
-    build:
-      context: ./exporters
-      dockerfile: Dockerfile.freeswitch
+    image: voxtrigger_demo_docker-freeswitch_exporter:latest
     depends_on:
       freeswitch:
         condition: service_healthy
@@ -106,24 +110,6 @@ services:
     networks:
       - sip_net
 
-  # Debug SIP: docker compose --profile debug run --rm -it sip-debug
-  sip-debug:
-    build: ./sip-debug
-    image: docker_demo_pwt/sip-debug:latest
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      SIP_NETWORK: ${COMPOSE_PROJECT_NAME:-docker_demo_pwt}_sip_net
-      SIP_CAPTURE: ${SIP_CAPTURE:-clean}
-    stdin_open: true
-    tty: true
-    profiles:
-      - debug
-
 networks:
   sip_net:
     driver: bridge
@@ -131,9 +117,3 @@ networks:
 volumes:
   pgdata:
   cdr_vxt:
-
-secrets:
-  signalwire_token:
-    environment: SIGNALWIRE_TOKEN
-  freeswitch_git_token:
-    environment: FREESWITCH_GIT_TOKEN
