@@ -6,8 +6,7 @@ DB_PASS="${POSTGRES_PASSWORD:-changeme}"
 OPENSIPS_SIP_PORT="${OPENSIPS_SIP_PORT:-5060}"
 OPENSIPS_ALT_SIP_PORT="${OPENSIPS_ALT_SIP_PORT:-5070}"
 OPENSIPS_ADDRESS_IP="${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}"
-CARRIER_ROUTES="${CARRIER_ROUTES:-prefix:23,split:2}"
-OPENSIPS_CARRIER_REWRITE_HOST="${OPENSIPS_CARRIER_REWRITE_HOST:-freeswitch:5080}"
+CARRIER_ROUTES="${CARRIER_ROUTES:-prefix:23,split:2,host:pbx-lab.piwiit.com:5080}"
 SQL_DIR=/usr/share/opensips/postgres
 
 sql_escape() {
@@ -80,9 +79,14 @@ parse_route_fields() {
     echo "CARRIER_ROUTES entry missing prefix: $entry" >&2
     exit 1
   fi
-
-  [ -n "$split" ] || split="0"
-  [ -n "$host" ] || host="${OPENSIPS_CARRIER_REWRITE_HOST}"
+  if [ -z "$split" ]; then
+    echo "CARRIER_ROUTES entry missing split: $entry" >&2
+    exit 1
+  fi
+  if [ -z "$host" ]; then
+    echo "CARRIER_ROUTES entry missing host: $entry" >&2
+    exit 1
+  fi
 
   printf '%s %s %s\n' "$prefix" "$split" "$host"
 }
