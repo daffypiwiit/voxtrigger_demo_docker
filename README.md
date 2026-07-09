@@ -91,7 +91,7 @@ docker restart cliente-a-opensips-1
 | Cambio | Acción |
 |---|---|
 | Variables `.env` runtime (puertos, rutas, RTP, VoxTrigger) | **Redeploy / restart** en Portainer. Rebuild **no** |
-| `CARRIER_ROUTES`, `OPENSIPS_ADDRESS_IP` | Redeploy + **`docker restart …-opensips-1`** |
+| `CARRIER_ROUTES`, `SRC_IP_WHITELIST` | Redeploy + **`docker restart …-opensips-1`** |
 | `opensips/`, `haproxy/`, Dockerfiles, `opensips.cfg` | **`docker compose build`** + redeploy Portainer |
 | Repo Bitbucket FreeSWITCH (`pwt.freeswitch_vxt`) | **`docker compose build freeswitch`** + redeploy |
 | Tokens SignalWire / Bitbucket (solo build) | Rebuild **freeswitch** |
@@ -205,7 +205,7 @@ Seeds aplicados al arrancar OpenSIPS (entrypoint):
 
 - Schema base OpenSIPS en Postgres
 - `opensips/postgres-seed/02-seed-carrierroute.sql` (route_tree + dispatcher)
-- ACL (`address`) desde `OPENSIPS_ADDRESS_IP`
+- ACL (`address`) desde `SRC_IP_WHITELIST`
 - `carrierroute` desde `CARRIER_ROUTES`
 
 ---

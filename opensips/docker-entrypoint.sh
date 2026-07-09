@@ -5,7 +5,7 @@ DB_HOST="${OPENSIPS_DB_HOST:-postgres}"
 DB_PASS="${POSTGRES_PASSWORD:-changeme}"
 OPENSIPS_SIP_PORT="${OPENSIPS_SIP_PORT:-5060}"
 OPENSIPS_ALT_SIP_PORT="${OPENSIPS_ALT_SIP_PORT:-5070}"
-OPENSIPS_ADDRESS_IP="${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}"
+SRC_IP_WHITELIST="${SRC_IP_WHITELIST:-${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}}"
 CARRIER_ROUTES="${CARRIER_ROUTES:-prefix:23,split:2,host:pbx-lab.piwiit.com:5080}"
 DISPATCHER_DESTINATIONS="${DISPATCHER_DESTINATIONS:-sip:freeswitch:5080}"
 SQL_DIR=/usr/share/opensips/postgres
@@ -30,7 +30,7 @@ generate_address_seed() {
   local -a entries
   local entry ip mask rows=() id=1 i
 
-  IFS=',' read -r -a entries <<< "${OPENSIPS_ADDRESS_IP}"
+  IFS=',' read -r -a entries <<< "${SRC_IP_WHITELIST}"
 
   for i in "${!entries[@]}"; do
     entry="$(echo "${entries[$i]}" | xargs)"
@@ -42,7 +42,7 @@ generate_address_seed() {
   done
 
   if [ "${#rows[@]}" -eq 0 ]; then
-    echo "No OPENSIPS_ADDRESS_IP entries configured" >&2
+    echo "No SRC_IP_WHITELIST entries configured" >&2
     exit 1
   fi
 

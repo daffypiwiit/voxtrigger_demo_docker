@@ -1,4 +1,5 @@
 # Multi-FS stack: 2 FreeSWITCH nodes per client behind one OpenSIPS.
+# ponytail: no YAML anchors — Portainer CE drops merged services silently.
 #
 # Portainer:
 #   Stack name: cliente-a (must match env file)
@@ -7,33 +8,6 @@
 #
 # CLI:
 #   docker compose -f stacks/docker-compose.yml --env-file stacks/cliente-a.env.example -p cliente-a up -d
-
-x-freeswitch: &freeswitch-base
-  image: voxtrigger_demo_docker-freeswitch:latest
-  depends_on:
-    - opensips
-    - haproxy
-  environment: &freeswitch-env
-    FS_EXTERNAL_RTP_IP: ${FS_EXTERNAL_RTP_IP:-auto}
-    FS_EXTERNAL_SIP_IP: ${FS_EXTERNAL_SIP_IP:-auto}
-    PWT_SBC_IP: opensips
-    PWT_SBC_PORT: ${OPENSIPS_SIP_PORT:-5060}
-    SOFIA_PROFILE_NAME: external_0
-    PWT_VOXTRIGGER_IP: haproxy
-    PWT_VOXTRIGGER_PORT: 8080
-    MEDIA_OUT: ${MEDIA_OUT:-false}
-    VXT_ANSWER_DETECT: ${VXT_ANSWER_DETECT:-false}
-    TIMEOUTMS_ANSWER_VXT: ${TIMEOUTMS_ANSWER_VXT:-2300}
-    VXT_WS_EXCLUDE_PREANSWER: ${VXT_WS_EXCLUDE_PREANSWER:-}
-    VXT_WS_EXCLUDE_ANSWER: ${VXT_WS_EXCLUDE_ANSWER:-}
-  healthcheck:
-    test: [ "CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP" ]
-    interval: 10s
-    timeout: 5s
-    retries: 6
-    start_period: 30s
-  networks:
-    - sip_net
 
 services:
   postgres:
@@ -61,7 +35,7 @@ services:
       OPENSIPS_DB_HOST: postgres
       OPENSIPS_SIP_PORT: ${OPENSIPS_SIP_PORT:-5060}
       OPENSIPS_ALT_SIP_PORT: ${OPENSIPS_ALT_SIP_PORT:-5070}
-      OPENSIPS_ADDRESS_IP: ${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}
+      SRC_IP_WHITELIST: ${SRC_IP_WHITELIST:-0.0.0.0/0}
       CARRIER_ROUTES: ${CARRIER_ROUTES:-prefix:23,split:2,host:pbx-lab.piwiit.com:5080}
       DISPATCHER_DESTINATIONS: ${DISPATCHER_DESTINATIONS:-sip:freeswitch-1:5080,sip:freeswitch-2:5080}
     ports:
@@ -72,26 +46,70 @@ services:
       - sip_net
 
   freeswitch-1:
-    <<: *freeswitch-base
+    image: voxtrigger_demo_docker-freeswitch:latest
+    depends_on:
+      - opensips
+      - haproxy
     environment:
-      <<: *freeswitch-env
+      FS_EXTERNAL_RTP_IP: ${FS_EXTERNAL_RTP_IP:-auto}
+      FS_EXTERNAL_SIP_IP: ${FS_EXTERNAL_SIP_IP:-auto}
+      PWT_SBC_IP: opensips
+      PWT_SBC_PORT: ${OPENSIPS_SIP_PORT:-5060}
+      SOFIA_PROFILE_NAME: external_0
+      PWT_VOXTRIGGER_IP: haproxy
+      PWT_VOXTRIGGER_PORT: 8080
+      MEDIA_OUT: ${MEDIA_OUT:-false}
+      VXT_ANSWER_DETECT: ${VXT_ANSWER_DETECT:-false}
+      TIMEOUTMS_ANSWER_VXT: ${TIMEOUTMS_ANSWER_VXT:-2300}
+      VXT_WS_EXCLUDE_PREANSWER: ${VXT_WS_EXCLUDE_PREANSWER:-}
+      VXT_WS_EXCLUDE_ANSWER: ${VXT_WS_EXCLUDE_ANSWER:-}
       FS_RTP_START_PORT: ${FS1_RTP_START_PORT:-16384}
       FS_RTP_END_PORT: ${FS1_RTP_END_PORT:-18021}
     ports:
       - "${FS1_RTP_START_PORT:-16384}-${FS1_RTP_END_PORT:-18021}:${FS1_RTP_START_PORT:-16384}-${FS1_RTP_END_PORT:-18021}/udp"
     volumes:
       - cdr_vxt_1:/opt/cdr/vxt
+    healthcheck:
+      test: [ "CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - sip_net
 
   freeswitch-2:
-    <<: *freeswitch-base
+    image: voxtrigger_demo_docker-freeswitch:latest
+    depends_on:
+      - opensips
+      - haproxy
     environment:
-      <<: *freeswitch-env
+      FS_EXTERNAL_RTP_IP: ${FS_EXTERNAL_RTP_IP:-auto}
+      FS_EXTERNAL_SIP_IP: ${FS_EXTERNAL_SIP_IP:-auto}
+      PWT_SBC_IP: opensips
+      PWT_SBC_PORT: ${OPENSIPS_SIP_PORT:-5060}
+      SOFIA_PROFILE_NAME: external_0
+      PWT_VOXTRIGGER_IP: haproxy
+      PWT_VOXTRIGGER_PORT: 8080
+      MEDIA_OUT: ${MEDIA_OUT:-false}
+      VXT_ANSWER_DETECT: ${VXT_ANSWER_DETECT:-false}
+      TIMEOUTMS_ANSWER_VXT: ${TIMEOUTMS_ANSWER_VXT:-2300}
+      VXT_WS_EXCLUDE_PREANSWER: ${VXT_WS_EXCLUDE_PREANSWER:-}
+      VXT_WS_EXCLUDE_ANSWER: ${VXT_WS_EXCLUDE_ANSWER:-}
       FS_RTP_START_PORT: ${FS2_RTP_START_PORT:-18022}
       FS_RTP_END_PORT: ${FS2_RTP_END_PORT:-19659}
     ports:
       - "${FS2_RTP_START_PORT:-18022}-${FS2_RTP_END_PORT:-19659}:${FS2_RTP_START_PORT:-18022}-${FS2_RTP_END_PORT:-19659}/udp"
     volumes:
       - cdr_vxt_2:/opt/cdr/vxt
+    healthcheck:
+      test: [ "CMD-SHELL", "fs_cli -H 127.0.0.1 -P 8021 -p ClueCon -x status | grep -q UP" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - sip_net
 
   haproxy:
     image: voxtrigger_demo_docker-haproxy:latest
@@ -114,7 +132,7 @@ services:
     depends_on:
       freeswitch-1:
         condition: service_healthy
-    command: [ "/usr/local/bin/freeswitch_exporter", "-u", "tcp://freeswitch-1:8021" ]
+    command: [ "-u", "tcp://freeswitch-1:8021" ]
     ports:
       - "${FREESWITCH_EXPORTER_PORT_1:-9282}:9282"
     networks:
@@ -125,7 +143,7 @@ services:
     depends_on:
       freeswitch-2:
         condition: service_healthy
-    command: [ "/usr/local/bin/freeswitch_exporter", "-u", "tcp://freeswitch-2:8021" ]
+    command: [ "-u", "tcp://freeswitch-2:8021" ]
     ports:
       - "${FREESWITCH_EXPORTER_PORT_2:-9283}:9282"
     networks:
