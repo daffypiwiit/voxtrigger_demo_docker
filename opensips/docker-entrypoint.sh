@@ -7,6 +7,7 @@ OPENSIPS_SIP_PORT="${OPENSIPS_SIP_PORT:-5060}"
 OPENSIPS_ALT_SIP_PORT="${OPENSIPS_ALT_SIP_PORT:-5070}"
 OPENSIPS_ADDRESS_IP="${OPENSIPS_ADDRESS_IP:-0.0.0.0/0}"
 CARRIER_ROUTES="${CARRIER_ROUTES:-prefix:23,split:2,host:pbx-lab.piwiit.com:5080}"
+DISPATCHER_DESTINATIONS="${DISPATCHER_DESTINATIONS:-sip:freeswitch:5080}"
 SQL_DIR=/usr/share/opensips/postgres
 
 sql_escape() {
@@ -91,6 +92,39 @@ parse_route_fields() {
   printf '%s %s %s\n' "$prefix" "$split" "$host"
 }
 
+generate_dispatcher_seed() {
+  local dests="${DISPATCHER_DESTINATIONS}"
+  local -a entries
+  local entry rows=() id=1 i
+
+  IFS=',' read -r -a entries <<< "$dests"
+  for entry in "${entries[@]}"; do
+    entry="$(echo "$entry" | xargs)"
+    [ -n "$entry" ] || continue
+    rows+=("    ($id, 101, '$(sql_escape "$entry")', NULL, 0, 0, 1, 0, '', 'dispatcher_${id}')")
+    id=$((id + 1))
+  done
+
+  if [ "${#rows[@]}" -eq 0 ]; then
+    echo "No DISPATCHER_DESTINATIONS entries configured" >&2
+    exit 1
+  fi
+
+  {
+    echo "INSERT INTO public.dispatcher (id, setid, destination, socket, state, probe_mode, weight, priority, attrs, description) VALUES"
+    for i in "${!rows[@]}"; do
+      if [ "$i" -lt $((${#rows[@]} - 1)) ]; then
+        echo "${rows[$i]},"
+      else
+        echo "${rows[$i]}"
+      fi
+    done
+    echo "ON CONFLICT (id) DO UPDATE SET"
+    echo "  destination = EXCLUDED.destination,"
+    echo "  description = EXCLUDED.description;"
+  }
+}
+
 generate_carrier_route_seed() {
   local routes="${CARRIER_ROUTES}"
   local entry prefix split host rows=() id=1
@@ -158,6 +192,7 @@ mkdir -p "$SEED_DIR"
 cp /opt/opensips-seed/*.sql "$SEED_DIR/"
 generate_address_seed > "$SEED_DIR/00-address.generated.sql"
 generate_carrier_route_seed > "$SEED_DIR/01-carrier-routes.generated.sql"
+generate_dispatcher_seed > "$SEED_DIR/02-dispatcher.generated.sql"
 
 for seed in "$SEED_DIR"/*.sql; do
   [ -f "$seed" ] || continue
